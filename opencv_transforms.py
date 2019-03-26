@@ -13,7 +13,7 @@ import types
 import collections
 import warnings
 
-import opencv_functional as F
+from . import opencv_functional as F
 import cv2
 # from . import functional as F
 
@@ -36,8 +36,10 @@ _cv2_interpolation_from_str= {v:k for k,v in _cv2_interpolation_to_str.items()}
 
 class Compose(object):
     """Composes several transforms together.
+
     Args:
         transforms (list of ``Transform`` objects): list of transforms to compose.
+
     Example:
         >>> transforms.Compose([
         >>>     transforms.CenterCrop(10),
@@ -63,15 +65,20 @@ class Compose(object):
 
 
 class ToTensor(object):
-    """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
-    Converts a PIL Image or numpy.ndarray (H x W x C) in the range
-    [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0].
+    """Convert a ``numpy.ndarray`` to tensor.
+
+    Converts a numpy.ndarray (H x W x C) in the range [0, 255] to a
+    torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] if the
+    numpy.ndarray has dtype = np.uint8
+
+    In the other cases, tensors are returned without scaling.
     """
 
     def __call__(self, pic):
         """
         Args:
-            pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
+            pic (numpy.ndarray): Image to be converted to tensor.
+
         Returns:
             Tensor: Converted image.
         """
@@ -80,19 +87,23 @@ class ToTensor(object):
     def __repr__(self):
         return self.__class__.__name__ + '()'
 
+
 class Normalize(object):
     """Normalize a tensor image with mean and standard deviation.
-    Given mean: ``(M1,...,Mn)`` and std: ``(S1,..,Sn)`` for ``n`` channels, this transform
-    will normalize each channel of the input ``torch.*Tensor`` i.e.
-    ``input[channel] = (input[channel] - mean[channel]) / std[channel]``
+    Given mean: ``(M1,...,Mn)`` and std: ``(S1,..,Sn)`` for ``n`` channels,
+    this transform will normalize each channel of the input ``torch.*Tensor``
+    i.e. ``input[channel] = (input[channel] - mean[channel]) / std[channel]``
+
     .. note::
         This transform acts in-place, i.e., it mutates the input tensor.
-    Args:
-        mean (sequence): Sequence of means for each channel.
-        std (sequence): Sequence of standard deviations for each channel.
-    """
 
-    def __init__(self, mean, std):
+    Args:
+        mean (sequence): Sequence of means for each channel. Default values are
+            taken from Imagenet classification.
+        std (sequence): Sequence of standard deviations for each channel.
+            Default values are taken from Imagenet classification.
+    """
+    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
         self.mean = mean
         self.std = std
 
@@ -100,6 +111,7 @@ class Normalize(object):
         """
         Args:
             tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
+
         Returns:
             Tensor: Normalized Tensor image.
         """
@@ -111,6 +123,7 @@ class Normalize(object):
 
 class Resize(object):
     """Resize the input numpy ndarray to the given size.
+
     Args:
         size (sequence or int): Desired output size. If size is a sequence like
             (h, w), output size will be matched to this. If size is an int,
@@ -122,7 +135,8 @@ class Resize(object):
     """
 
     def __init__(self, size, interpolation=cv2.INTER_CUBIC):
-        assert isinstance(size, int) or (isinstance(size, collections.Iterable) and len(size) == 2)
+        assert isinstance(size, int) or \
+                (isinstance(size, collections.Iterable) and len(size) == 2)
         self.size = size
         self.interpolation = interpolation
 
@@ -130,6 +144,7 @@ class Resize(object):
         """
         Args:
             img (numpy ndarray): Image to be scaled.
+
         Returns:
             numpy ndarray: Rescaled image.
         """
@@ -152,6 +167,7 @@ class Scale(Resize):
 
 class CenterCrop(object):
     """Crops the given numpy ndarray at the center.
+
     Args:
         size (sequence or int): Desired output size of the crop. If size is an
             int instead of sequence like (h, w), a square crop (size, size) is
@@ -168,6 +184,7 @@ class CenterCrop(object):
         """
         Args:
             img (numpy ndarray): Image to be cropped.
+
         Returns:
             numpy ndarray: Cropped image.
         """

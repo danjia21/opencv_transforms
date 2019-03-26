@@ -38,10 +38,13 @@ def _is_numpy_image(img):
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
 def to_tensor(pic):
-    """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
+    """Convert a ``numpy.ndarray`` to tensor.
+
     See ``ToTensor`` for more details.
+
     Args:
-        pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
+        pic (numpy.ndarray): Image to be converted to tensor.
+
     Returns:
         Tensor: Converted image.
     """
@@ -49,7 +52,9 @@ def to_tensor(pic):
         raise TypeError('pic should be ndarray. Got {}'.format(type(pic)))
 
     # handle numpy array
+    pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
     img = torch.from_numpy(pic.transpose((2, 0, 1)))
+
     # backward compatibility
     if isinstance(img, torch.ByteTensor) or img.dtype==torch.uint8:
         return img.float().div(255)
@@ -58,9 +63,12 @@ def to_tensor(pic):
 
 def normalize(tensor, mean, std):
     """Normalize a tensor image with mean and standard deviation.
+
     .. note::
         This transform acts in-place, i.e., it mutates the input tensor.
-    See :class:`~torchvision.transforms.Normalize` for more details.
+
+    See :class:`~opencv_transforms.opencv_transforms.Normalize` for more details.
+
     Args:
         tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
         mean (sequence): Sequence of means for each channel.
@@ -78,6 +86,7 @@ def normalize(tensor, mean, std):
 
 def resize(img, size, interpolation=cv2.INTER_CUBIC):
     r"""Resize the input numpy ndarray to the given size.
+
     Args:
         img (numpy ndarray): Image to be resized.
         size (sequence or int): Desired output size. If size is a sequence like
@@ -87,32 +96,33 @@ def resize(img, size, interpolation=cv2.INTER_CUBIC):
             :math:`\left(\text{size} \times \frac{\text{height}}{\text{width}}, \text{size}\right)`
         interpolation (int, optional): Desired interpolation. Default is
             ``cv2.INTER_CUBIC``
+
     Returns:
         PIL Image: Resized image.
     """
     if not _is_numpy_image(img):
         raise TypeError('img should be numpy image. Got {}'.format(type(img)))
-    if not (isinstance(size, int) or (isinstance(size, collections.Iterable) and len(size) == 2)):
+    if not (isinstance(size, int) or \
+            (isinstance(size, collections.Iterable) and len(size) == 2)):
         raise TypeError('Got inappropriate size arg: {}'.format(size))
-    w, h, =  size
+
+    # If image is gray-scale
+    if len(img.shape) == 2:
+        img = np.expand_dims(img, axis=2)
 
     if isinstance(size, int):
+        h, w, _ = img.shape
         if (w <= h and w == size) or (h <= w and h == size):
             return img
         if w < h:
             ow = size
             oh = int(size * h / w)
-            output = cv2.resize(img, dsize=(ow, oh), interpolation=interpolation)
         else:
             oh = size
             ow = int(size * w / h)
-            output = cv2.resize(img, dsize=(ow, oh), interpolation=interpolation)
+        return cv2.resize(img, dsize=(ow, oh), interpolation=interpolation)
     else:
-        output = cv2.resize(img, dsize=size[::-1], interpolation=interpolation)
-    if img.shape[2]==1:
-        return(output[:,:,np.newaxis])
-    else:
-        return(output)
+        return cv2.resize(img, dsize=size[::-1], interpolation=interpolation)
 
 def scale(*args, **kwargs):
     warnings.warn("The use of the transforms.Scale transform is deprecated, " +
@@ -176,13 +186,15 @@ def pad(img, padding, fill=0, padding_mode='constant'):
                                      borderType=_cv2_pad_to_str[padding_mode], value=fill))
 
 def crop(img, i, j, h, w):
-    """Crop the given PIL Image.
+    """Crop the given numpy ndarray.
+
     Args:
         img (numpy ndarray): Image to be cropped.
-        i: Upper pixel coordinate.
-        j: Left pixel coordinate.
+        i: Top-left pixel coordinate (row).
+        j: Top-left pixel coordinate (column).
         h: Height of the cropped image.
         w: Width of the cropped image.
+
     Returns:
         numpy ndarray: Cropped image.
     """
@@ -194,7 +206,7 @@ def crop(img, i, j, h, w):
 def center_crop(img, output_size):
     if isinstance(output_size, numbers.Number):
         output_size = (int(output_size), int(output_size))
-    w, h = img.shape[0:2]
+    h, w, _ = img.shape
     th, tw = output_size
     i = int(round((h - th) / 2.))
     j = int(round((w - tw) / 2.))
@@ -249,7 +261,7 @@ def vflip(img):
     else:
         return cv2.flip(img, 0)
     # img[::-1] is much faster, but doesn't work with torch.from_numpy()!
-    
+
 
 
 def five_crop(img, size):
@@ -397,7 +409,7 @@ def adjust_hue(img, hue_factor):
     Returns:
         numpy ndarray: Hue adjusted image.
     """
-    # After testing, found that OpenCV calculates the Hue in a call to 
+    # After testing, found that OpenCV calculates the Hue in a call to
     # cv2.cvtColor(..., cv2.COLOR_BGR2HSV) differently from PIL
 
     # This function takes 160ms! should be avoided
@@ -444,7 +456,7 @@ def adjust_gamma(img, gamma, gain=1):
         raise ValueError('Gamma should be a non-negative real number')
     # from here
     # https://stackoverflow.com/questions/33322488/how-to-change-image-illumination-in-opencv-python/41061351
-    table = np.array([((i / 255.0) ** gamma) * 255 * gain 
+    table = np.array([((i / 255.0) ** gamma) * 255 * gain
                       for i in np.arange(0, 256)]).astype('uint8')
     if img.shape[2]==1:
         return cv2.LUT(img, table)[:,:,np.newaxis]
@@ -490,18 +502,18 @@ def _get_affine_matrix(center, angle, translate, scale, shear):
     #       RSS(a, scale, shear) = [ cos(a)*scale    -sin(a + shear)*scale     0]
     #                              [ sin(a)*scale    cos(a + shear)*scale     0]
     #                              [     0                  0          1]
-    
+
     angle = math.radians(angle)
     shear = math.radians(shear)
     # scale = 1.0 / scale
-    
+
     T = np.array([[1, 0, translate[0]], [0, 1, translate[1]], [0,0,1]])
     C = np.array([[1, 0, center[0]], [0, 1, center[1]], [0,0,1]])
     RSS = np.array([[math.cos(angle)*scale, -math.sin(angle+shear)*scale, 0],
                    [math.sin(angle)*scale, math.cos(angle+shear)*scale, 0],
                    [0,0,1]])
     matrix = T @ C @ RSS @ np.linalg.inv(C)
-    
+
     return matrix[:2,:]
 
 def affine(img, angle, translate, scale, shear, interpolation=cv2.INTER_CUBIC, mode=cv2.BORDER_CONSTANT, fillcolor=0):
@@ -517,7 +529,7 @@ def affine(img, angle, translate, scale, shear, interpolation=cv2.INTER_CUBIC, m
             See `filters`_ for more information.
             If omitted, it is set to ``cv2.INTER_CUBIC``, for bicubic interpolation.
         mode (``cv2.BORDER_CONSTANT`` or ``cv2.BORDER_REPLICATE`` or ``cv2.BORDER_REFLECT`` or ``cv2.BORDER_REFLECT_101``)
-            Method for filling in border regions. 
+            Method for filling in border regions.
             Defaults to cv2.BORDER_CONSTANT, meaning areas outside the image are filled with a value (val, default 0)
         val (int): Optional fill color for the area outside the transform in the output image. Default: 0
     """
@@ -532,7 +544,7 @@ def affine(img, angle, translate, scale, shear, interpolation=cv2.INTER_CUBIC, m
     output_size = img.shape[0:2]
     center = (img.shape[1] * 0.5 + 0.5, img.shape[0] * 0.5 + 0.5)
     matrix = _get_affine_matrix(center, angle, translate, scale, shear)
-    
+
     if img.shape[2]==1:
         return cv2.warpAffine(img, matrix, output_size[::-1],interpolation, borderMode=mode, borderValue=fillcolor)[:,:,np.newaxis]
     else:
@@ -554,5 +566,5 @@ def to_grayscale(img, num_output_channels=1):
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)[:,:,np.newaxis]
     elif num_output_channels==3:
         # much faster than doing cvtColor to go back to gray
-        img = np.broadcast_to(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)[:,:,np.newaxis], img.shape) 
+        img = np.broadcast_to(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)[:,:,np.newaxis], img.shape)
     return img

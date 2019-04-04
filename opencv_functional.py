@@ -38,7 +38,7 @@ def _is_numpy_image(img):
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
 def to_tensor(pic):
-    """Convert a ``numpy.ndarray`` to tensor.
+    """Convert a CV image (BGR or gray-scale) to tensor (RGB).
 
     See ``ToTensor`` for more details.
 
@@ -52,7 +52,15 @@ def to_tensor(pic):
         raise TypeError('pic should be ndarray. Got {}'.format(type(pic)))
 
     # handle numpy array
-    pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
+    ndim = len(pic.shape)
+    if ndim == 3:
+        pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
+    elif ndim == 2:
+        pic = cv2.cvtColor(pic, cv2.COLOR_GRAY2RGB)
+    else:
+        raise ValueError('pic should be 1/3 dimensional. Got {} dimensions.' \
+                         .format(ndim))
+
     img = torch.from_numpy(pic.transpose((2, 0, 1)))
 
     # backward compatibility
@@ -60,6 +68,32 @@ def to_tensor(pic):
         return img.float().div(255)
     else:
         return img
+
+def to_cv_image(pic):
+    """Convert a tensor to CV image (BGR).
+
+    See ``ToCVImage`` for more details.
+
+    Args:
+        pic (Tensor): Image to be converted to PIL Image.
+
+
+    Returns:
+        ndarray: CV image in BGR.
+    """
+    if not isinstance(pic, torch.Tensor):
+        raise TypeError('pic should be Tensor. Got {}.'.format(type(pic)))
+
+    if pic.ndimension() != 3:
+        raise ValueError('pic should be 3 dimensional. Got {} dimensions.' \
+                         .format(pic.ndimension()))
+
+    pic = pic.permute(1, 2, 0)
+
+    if isinstance(pic, torch.FloatTensor):
+        pic = pic.mul(255).byte()
+
+    return cv2.cvtColor(pic.numpy(), cv2.COLOR_RGB2BGR)
 
 def normalize(tensor, mean, std):
     """Normalize a tensor image with mean and standard deviation.

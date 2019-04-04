@@ -17,7 +17,7 @@ from . import opencv_functional as F
 import cv2
 # from . import functional as F
 
-__all__ = ["Compose", "ToTensor", "ToPILImage", "Normalize", "Resize", "Scale", "CenterCrop", "Pad",
+__all__ = ["Compose", "ToTensor", "ToCVImage", "Normalize", "Resize", "Scale", "CenterCrop", "Pad",
            "Lambda", "RandomApply", "RandomChoice", "RandomOrder", "RandomCrop", "RandomHorizontalFlip",
            "RandomVerticalFlip", "RandomResizedCrop", "RandomSizedCrop", "FiveCrop", "TenCrop", "LinearTransformation",
            "ColorJitter", "RandomRotation", "RandomAffine", "Grayscale", "RandomGrayscale"]
@@ -65,7 +65,7 @@ class Compose(object):
 
 
 class ToTensor(object):
-    """Convert a ``numpy.ndarray`` to tensor.
+    """Convert a CV image (BGR) to tensor (RGB).
 
     Converts a numpy.ndarray (H x W x C) in the range [0, 255] to a
     torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] if the
@@ -85,7 +85,28 @@ class ToTensor(object):
         return F.to_tensor(pic)
 
     def __repr__(self):
-        return self.__class__.__name__ + '()'
+        return self.__class__.__name__
+
+
+class ToCVImage(object):
+    """Convert a tensor or an ndarray to CV Image.
+
+    Converts a torch.*Tensor of shape C x H x W to a BGR CV image with shape
+    H x W x C while preserving the value range.
+    """
+
+    def __call__(self, pic):
+        """
+        Args:
+            pic (Tensor): Image to be converted to CV Image.
+
+        Returns:
+            ndarray: CV image in BGR.
+        """
+        return F.to_cv_image(pic)
+
+    def __repr__(self):
+        return self.__class__.__name__
 
 
 class Normalize(object):
